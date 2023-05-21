@@ -1,0 +1,283 @@
+//1192110
+//carry ripple adder
+//Built 1-bit full adder from the basic gates 
+// gate level
+
+module bitfulladder(a,b,cin,sum,cout);
+	input a,b,cin;
+	output sum,cout;
+	wire x,y,z;
+	xor #12ns a1 (x,a,b);
+	and #8ns a2 (z,a,b);
+	xor #12ns a3 (sum,x,cin);
+	and #8ns a4 (y,x,cin);
+	or  #8ns a5 (cout,y,z);
+endmodule  
+
+
+//*************************************************************************//
+//Use the full adder to build 4-bit adder.
+module four_bit_adder( 
+  input [3:0] A,
+    input [3:0] B,
+    input C0,
+    output [3:0] S,
+    output C4
+    );
+    wire C1,C2,C3;
+
+    bitfulladder fa1 (A[0],B[0],C0,S[0],C1);
+    bitfulladder fa2 (A[1],B[1],C1,S[1],C2);
+    bitfulladder fa3 (A[2],B[2],C2,S[2],C3);
+    bitfulladder fa4 (A[3],B[3],C3,S[3],C4);
+
+
+endmodule 	
+
+//*************************************************************************//
+ 
+module inreg (clk,rest,Q,D);
+	input rest,clk;
+	parameter n=16;
+	input[n-1:0]D;
+	output[n-1:0]Q;	  
+	reg [n-1:0]	Q;
+	always@(posedge clk or posedge rest)
+		if (rest)
+			Q=0;
+		else if (clk==1)
+			Q=D;
+endmodule 
+
+//*************************************************************************//
+
+// output reg
+module outreg (clk,rest,Q,D);
+	input rest,clk;
+	parameter n=9;
+	input[n-1:0]D;
+	output[n-1:0]Q;	  
+	reg [n-1:0]	Q;
+	always@(posedge clk or posedge rest)
+		if (rest)
+			Q=0;
+		else if (clk==1)
+			Q=D;
+endmodule 
+
+//*************************************************************************//
+
+
+//Use the 4-bit adders to build 1-Digit BCD Adder  
+module bcd_adder(S,Cout,A,B,Cin);
+
+input [0:3]A,B;
+input Cin;
+output [0:3]S;
+output Cout;
+
+wire [1:0]W;
+wire [3:0]sum1;
+wire cout1;
+wire cout2;
+
+four_bit_adder F_A1 (sum1,cout1,A,B,Cin);
+four_bit_adder F_A2 (S,cout2,sum1,{1'b0,Cout,Cout,1'b0},1'b0);
+
+and #8ns v1 (W[0],sum1[3],sum1[2]);
+and #8ns v2 (W[1],sum1[3],sum1[1]);
+or #8ns v3(Cout,W[1],W[0],cout1);
+
+endmodule 
+
+//*************************************************************************//
+//Use the 1-Digit BCD Adder to build the 2-Digit BCD Adder 
+module DigitBCD (carryin,carryout,A,B,M,N,rest,clk,out1);
+	input carryin,rest,clk;
+	input [3:0]B,A,M,N;
+	output carryout;
+	output [0:8] out1;
+	wire carry;
+	wire [3:0]a,b,m,n;
+	
+	 //inreg (clk,rest,Q,D);
+	inreg b3 (clk,rest,{A,B,M,N},{a,b,m,n});
+	
+	//bcd_adder(S,Cout,A,B,Cin);
+	bcd_adder b1 (out1[0:3],carry,m,n,Carryin);
+	bcd_adder b2 (out1[4:7],carryout,a,b,Carry);
+	assign carryout= out1[7:8];
+	// output reg // output reg module outreg (clk,rest,Q,D);
+ outreg b4 (clk,rest,Q,out1);
+	 
+endmodule 
+
+
+//*************************************************************************//
+ // stage 2
+// carry look ahead on 4-bit
+
+module CLA_4bit(
+    output [3:0] S,
+    output Cout,PG,GG,
+    input [3:0] A,B,
+    input Cin
+    );
+    wire [3:0] G,P,C;
+ 
+    assign G = A & B; //Generate
+    assign P = A ^ B; //Propagate
+    assign C[0] = Cin;
+    assign C[1] = G[0] | (P[0] & C[0]);
+    assign C[2] = G[1] | (P[1] & G[0]) | (P[1] & P[0] & C[0]);
+    assign C[3] = G[2] | (P[2] & G[1]) | (P[2] & P[1] & G[0]) |(P[2] & P[1] & P[0] & C[0]);
+    assign Cout = G[3] | (P[3] & G[2]) | (P[3] & P[2] & G[1]) | (P[3] & P[2] & P[1] & G[0]) |(P[3] & P[2] & P[1] & P[0] & C[0]);
+    assign S = P ^ C;
+    
+    assign PG = P[3] & P[2] & P[1] & P[0];
+    assign GG = G[3] | (P[3] & G[2]) | (P[3] & P[2] & G[1]) | (P[3] & P[2] & P[1] & G[0]);
+endmodule
+
+
+
+//*************************************************************************//
+
+// carry look ahead on 4-bit
+//Use the 4-bit adders to build 1-Digit BCD Adder  
+module bcd_adder22(S,Cout,A,B,Cin);
+
+input [0:3]A,B;
+input Cin;
+output [0:3]S;
+output Cout;
+
+wire [1:0]W;
+wire [3:0]sum1;
+wire cout1;
+wire cout2;
+
+adder_4bit_cla F_A11 (sum1,cout1,A,B,Cin);
+adder_4bit_cla F_A22 (S,cout2,sum1,{1'b0,Cout,Cout,1'b0},1'b0);
+
+and #8ns v1 (W[0],sum1[3],sum1[2]);
+and #8ns v2 (W[1],sum1[3],sum1[1]);
+or #8ns v3(Cout,W[1],W[0],cout1);
+
+endmodule  
+
+//*************************************************************************//
+
+//Use the 1-Digit BCD Adder to build the 2-Digit BCD Adder 
+module DigitBCD22 (carryin,carryout,A,B,M,N,rest,clk,out1);
+	input carryin,rest,clk;
+	input [3:0]B,A,M,N;
+	output carryout;
+	output [0:8] out1;
+	wire carry;
+	wire [3:0]a,b,m,n;
+	
+	 //inreg (clk,rest,Q,D);
+	inreg b3 (clk,rest,{A,B,M,N},{a,b,m,n});
+	
+	//bcd_adder(S,Cout,A,B,Cin);
+	bcd_adder22 b12 (out1[0:3],carry,m,n,Carryin);
+	bcd_adder22 b21 (out1[4:7],carryout,a,b,Carry);
+	assign carryout= out1[7:8];
+	// output reg // output reg module outreg (clk,rest,Q,D);
+    outreg b4 (clk,rest,Q,out1);
+endmodule
+//*************************************************************************//
+module testcircuit;
+	reg [3:0]A,B,M,N;
+	wire truth_carry;
+	wire [1:0]truth_sum;	
+		wire carryout;
+	wire [1:0]out1;
+	reg mode,clk,rest;
+	 
+	testgenerator test22(truth_sum,truth_carry,A,B,M,N);
+	DigitBCD22 bcd22(carryin,carryout,A,B,M,N,rest,clk,out1); 
+	system_analizer analizer22 (truth_sum,tuth_carry,out1,carryout,rest,clk); 
+endmodule
+	
+	
+//*************************************************************************//
+//system_analizer to check truth result with adder result 
+module system_analizer(truth_sum,truth_carry,out1,carryout,rest,clk);
+	input [1:0]truth_sum,out1;
+	input 	rest,clk ,carryout,truth_carry;
+	always@(posedge clk)begin
+		if(( truth_sum !==  out1)) begin 
+			$display ("Incorrect result at %d",$time);
+			$finish;
+		end
+	else if(( truth_carry !==  carryout)) begin	
+		
+		$display ("Incorrect result at %d",$time);
+		$finish;
+		
+	end
+	end 
+endmodule
+
+//*************************************************************************//
+
+
+module testgenerator( truth_sum,truth_carry,carryin,A1, B1, A2, B2,);
+	input [4:0] A1, B1, A2, B2;
+	input carryin;	 
+	output reg truth_carry;
+	output reg [7:0] truth_sum;	 
+	reg c;
+	reg [3:0] sum1, sum2;	 
+	
+	always @ (A1, B1, A2, B2, carryin)
+		begin
+			sum1 = A1 + B1 + 0 ;   
+			
+			if(sum1 > 9)
+				begin
+					sum1 = sum1 + 6;
+					c = 1;
+					truth_sum[7:4] = sum1[3:0];	
+				end	 
+			else
+				begin			 
+					c = 0;
+					truth_sum[7:4] = sum1[3:0];
+				end				
+				sum2 = A2 + B2 + c;	  
+				
+				if(sum2 > 9)
+				begin
+					sum2 = sum2 + 6;
+					truth_carry = 1;
+					truth_sum[3:0] = sum2[3:0];
+				end	 
+				
+			else
+				begin			 
+					truth_carry = 0;
+					truth_sum[3:0] = sum2[3:0];
+				end	
+			end
+endmodule
+
+
+	
+//*************************************************************************//
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
